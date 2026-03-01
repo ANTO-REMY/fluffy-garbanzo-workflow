@@ -1,16 +1,44 @@
-# Hello GitHub Actions
+# Remy Care Connect — Security Workflow Hub
 
-<img src="https://octodex.github.com/images/Professortocat_v2.png" align="right" height="200px" />
+This repo is the single source of truth for **GitHub Actions security workflows** used across the Remy Care Connect project. It holds ready-to-use workflow templates, a vulnerability-testing plan, and setup notes for both repositories below.
 
-Hey ANTO-REMY!
+| Repository | Stack | Link |
+|---|---|---|
+| `remy-care-connect` | TypeScript · React 18 · Vite · Shadcn/Radix | [ANTO-REMY/remy-care-connect](https://github.com/ANTO-REMY/remy-care-connect) |
+| `remy-care-connect-backend` | Python 3.11 · Flask · PostgreSQL · JWT | [ANTO-REMY/remy-care-connect-backend](https://github.com/ANTO-REMY/remy-care-connect-backend) |
 
-Mona here. I'm done preparing your exercise. Hope you enjoy! 💚
+Yes — **this repo is meant to serve both** `remy-care-connect` (frontend) and `remy-care-connect-backend`. The `workflows/` directory contains a separate template for each:
 
-Remember, it's self-paced so feel free to take a break! ☕️
-
-[![](https://img.shields.io/badge/Go%20to%20Exercise-%E2%86%92-1f883d?style=for-the-badge&logo=github&labelColor=197935)](https://github.com/ANTO-REMY/fluffy-garbanzo-workflow/issues/2)
+- [`workflows/frontend-security.yml`](./workflows/frontend-security.yml) → copy into `remy-care-connect/.github/workflows/security.yml`
+- [`workflows/backend-security.yml`](./workflows/backend-security.yml) → copy into `remy-care-connect-backend/.github/workflows/security.yml`
 
 ---
 
-&copy; 2025 GitHub &bull; [Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.md) &bull; [MIT License](https://gh.io/mit)
+## What the workflows do
+
+### Frontend (`remy-care-connect`)
+- **npm audit** — flags high/critical CVEs in npm dependencies
+- **CodeQL** — static analysis for JavaScript/TypeScript security vulnerabilities
+
+### Backend (`remy-care-connect-backend`)
+- **pip-audit** — checks Python dependencies against the PyPI advisory database
+- **Bandit** — SAST for Flask-specific issues (hardcoded secrets, `DEBUG=True`, SQL injection hints)
+- **CodeQL** — semantic analysis for Python
+- **Trivy** — scans the Docker image for OS-level and pip CVEs
+
+Both workflows run on every push to `main`, on pull requests targeting `main`, and on a weekly schedule (Mondays at 08:00 UTC) to catch new CVEs even when no code changes are made.
+
+---
+
+## Getting started
+
+1. Copy the relevant workflow file into the target repo's `.github/workflows/` directory.
+2. Commit to `main` or open a PR — the workflow will trigger automatically.
+3. Check the **Security** tab of each repo for CodeQL and Trivy SARIF results.
+
+For the full rollout plan and priority checklist, see [VULNERABILITY_TESTING_PLAN.md](./VULNERABILITY_TESTING_PLAN.md).
+
+---
+
+&copy; 2025 ANTO-REMY &bull; [MIT License](https://gh.io/mit)
 
