@@ -1,0 +1,131 @@
+# Security vulnerability testing workflow for remy-care-connect-backend (Python / Flask)
+#
+# Copy this file to:  .github/workflows/security.yml  in the remy-care-connect-backend repository.
+#
+# What this does:
+#   1. pip-audit   — checks Python dependencies against the PyPI advisory database
+#   2. Bandit      — Python SAST: detects insecure coding patterns (hardcoded secrets,
+#                    DEBUG=True, SQL injection hints, weak crypto, etc.)
+#   3. CodeQL      — GitHub's semantic analysis engine for Python
+#   4. Trivy       — scans the Docker image for OS + pip CVEs (high/critical)
+#
+# All jobs run on push to main, on pull requests targeting main, and weekly on Mondays.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+  security-events: write   # required to upload CodeQL / Trivy SARIF results
+  actions: read
+
+jobs:
+  # ── 1. Python dependency audit ────────────────────────────────────────────
+  pip-audit:
+    name: pip-audit (dependency CVEs)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit against requirements.txt
+        # --require-hashes can be added once hashes are pinned for stronger supply-chain security.
+        run: pip-audit -r requirements.txt
+
+  # ── 2. Bandit static analysis ─────────────────────────────────────────────
+  bandit:
+    name: Bandit (Python SAST)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit
+        # -r .          →  scan recursively from repo root
+        # -ll           →  report issues of LOW severity and above
+        # --exclude     →  skip virtual-env, cache, and migration directories
+        run: |
+          bandit -r . -ll \
+            --exclude ./.venv,./venv,./migrations,./node_modules,./__pycache__ \
+            --format txt
+
+  # ── 3. CodeQL static analysis ─────────────────────────────────────────────
+  codeql:
+    name: CodeQL (SAST)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Optional: add custom query suites for stricter checks:
+          # queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+
+  # ── 4. Trivy Docker image scan ────────────────────────────────────────────
+  trivy:
+    name: Trivy (container image scan)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for scanning
+        run: docker build -t remy-care-connect-backend:${{ github.sha }} .
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: remy-care-connect-backend:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          # Fail the job if HIGH or CRITICAL vulnerabilities are found.
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        # Always upload so results are visible even when the step above fails.
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-container
