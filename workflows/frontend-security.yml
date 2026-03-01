@@ -1,0 +1,74 @@
+# Security vulnerability testing workflow for remy-care-connect (TypeScript / React / Vite)
+#
+# Copy this file to:  .github/workflows/security.yml  in the remy-care-connect repository.
+#
+# What this does:
+#   1. npm audit   — checks npm dependencies against the npm advisory database (high/critical)
+#   2. CodeQL      — static analysis for JavaScript/TypeScript security vulnerabilities
+#
+# Both jobs run on every push to main and on every pull request targeting main.
+# A scheduled run on Monday mornings catches new CVEs even without code changes.
+
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+  security-events: write   # required to upload CodeQL SARIF results
+  actions: read
+
+jobs:
+  # ── 1. Dependency audit ────────────────────────────────────────────────────
+  npm-audit:
+    name: npm audit (dependency CVEs)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies (clean install)
+        run: npm ci
+
+      - name: Run npm audit
+        # --audit-level=high  →  fail only on high or critical severities
+        # Remove or lower the level to also fail on moderate vulnerabilities.
+        run: npm audit --audit-level=high
+
+  # ── 2. CodeQL static analysis ─────────────────────────────────────────────
+  codeql:
+    name: CodeQL (SAST)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # Optional: add custom query suites for stricter checks:
+          # queries: security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
